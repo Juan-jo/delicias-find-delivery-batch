@@ -9,6 +9,7 @@ import java.util.Objects;
 @Builder
 public record OrderDTO(
         Long orderId,
+        Integer zoneId,
         OrderStatus status,
         Point deliveryLocation,
         Point restaurantAddress

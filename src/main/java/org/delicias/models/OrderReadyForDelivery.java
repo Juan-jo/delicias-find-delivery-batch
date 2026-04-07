@@ -16,6 +16,9 @@ public class OrderReadyForDelivery {
     @Column(name = "order_id")
     private Long orderId;
 
+    @Column(name = "zone_id")
+    private Integer zoneId;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "status", columnDefinition = "pos_order_status")

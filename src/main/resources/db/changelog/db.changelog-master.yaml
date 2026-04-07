@@ -1,0 +1,138 @@
+databaseChangeLog:
+  - changeSet:
+      id: BATCH_01
+      author: jdev
+      changes:
+        - sql:
+            sql: >-
+              ALTER TABLE databasechangelog REPLICA IDENTITY FULL;
+        - createView:
+            encoding: UTF-8
+            replaceIfExists: true
+            schemaName: public
+            selectQuery: select   po.id as "order_id",
+                                  po.status,
+                                  po.delivery_location,
+                                  pri."position" as "restaurant_address",
+                                  po.zone_id
+                          from 	  pos_order po
+                          join	  pos_restaurant_info pri
+                            on	  po.restaurant_tmpl_id = pri.id
+                          where   po.created_date >= NOW() - INTERVAL '1 day'
+                                  and
+                                  po.status = 'READY_FOR_DELIVERY'
+                          limit   26;
+            viewName: ready_orders_for_delivery
+  - changeSet:
+      id: BATCH_02
+      author: jdev
+      changes:
+        - sql:
+            endDelimiter: \nGO
+            splitStatements: true
+            sql: >-
+              CREATE OR REPLACE FUNCTION del_assign_nearest_delivery_user_avaibale(
+                  p_restaurant_lat DOUBLE PRECISION,
+                  p_restaurant_lon DOUBLE PRECISION,
+                  p_order_id		 INT8,
+                  p_zone_id		      INT4
+              )
+              RETURNS BIGINT AS
+              $$
+              DECLARE
+                v_delivery_user_id 		INT4;
+              	v_restaurant_tmpl_id 	INT4;
+              	v_delivery_user_uuid 	UUID;
+              BEGIN
+
+              	WITH selected AS (
+                      SELECT 	id
+                      FROM 	delivery_users
+                      WHERE 	zone_id = p_zone_id
+              				AND
+              				status = 'AVAILABLE'
+                      ORDER 
+              			BY 	last_position <-> ST_SetSRID(ST_MakePoint(p_restaurant_lon, p_restaurant_lat), 4326)::geography
+                      LIMIT 1
+                      FOR UPDATE SKIP LOCKED
+                  ),
+              	insert_rel AS (
+                      INSERT INTO delivery_user_order_rel (
+                          	delivery_user_id,
+                          	order_id,
+                          	status
+                      )
+                      SELECT 	id, 
+              				p_order_id, 
+              				'NOT_STARTED'
+                      FROM 	selected
+
+                      RETURNING id, delivery_user_id
+                  ),
+              	update_order AS (
+
+                      UPDATE 	pos_order po
+                      	SET 	delivery_user_order_rel_id = ir.id,
+              					status = 'DELIVERY_ASSIGNED_ORDER'::pos_order_status
+                        FROM 	insert_rel ir
+                        WHERE 	po.id = p_order_id
+
+              		RETURNING 	ir.delivery_user_id
+                  )
+              	UPDATE    delivery_users du
+              	  SET     status = 'BUSY'
+              	  FROM    update_order uo
+              	  WHERE   du.id = uo.delivery_user_id
+              	RETURNING du.id, du.delivery_uuid
+              	INTO v_delivery_user_id, v_delivery_user_uuid;
+
+              	IF v_delivery_user_id IS NULL THEN
+                      RETURN NULL;
+                  END IF;
+
+              	SELECT		po.restaurant_tmpl_id
+              		INTO	v_restaurant_tmpl_id
+              		FROM 	pos_order po
+              		WHERE	po.id = p_order_id;
+
+              	-- Topic change status
+              	INSERT INTO outbox_event 
+              	(	id,
+              	    aggregate_id, 
+              	    "type", 
+              	    payload
+              	) 
+              	VALUES
+              	(	uuid_generate_v4(),
+              	    p_order_id,     
+              	    'ORDER_STATUS_CHANGED', 
+              	    jsonb_build_object(
+              	        'status', 'DELIVERY_ASSIGNED_ORDER',
+              	        'orderId', p_order_id,
+              	        'restaurantTmplId', v_restaurant_tmpl_id
+              	    )
+              	);
+
+              	-- Topic for user delivery
+              	INSERT INTO outbox_event 
+              	(	id,
+              	    aggregate_id, 
+              	    "type", 
+              	    payload
+              	) 
+              	VALUES
+              	(	uuid_generate_v4(),
+              	    p_order_id,     
+              	    'DELIVERY_USER_ASSIGNED_ORDER',
+              	    jsonb_build_object(
+              	        'deliveryUserUUID', v_delivery_user_uuid,
+              	        'payload', jsonb_build_object(
+              				'orderId', p_order_id
+              			)
+              	    )
+              	);
+
+                RETURN v_delivery_user_id;
+
+              END;
+              $$ LANGUAGE plpgsql;

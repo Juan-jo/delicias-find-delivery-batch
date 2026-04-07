@@ -5,10 +5,10 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.delicias.dto.OrderDTO;
+import org.delicias.repositories.DeliveryUserRepository;
 import org.delicias.repositories.OrderReadyForDeliveryRepository;
 import org.jboss.logging.Logger;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
@@ -28,6 +28,9 @@ public class SearchDeliveryBatch {
     OrderReadyForDeliveryRepository orderReadyForDeliveryRepository;
 
     @Inject
+    DeliveryUserRepository deliveryUserRepository;
+
+    @Inject
     ExecutorService consumerExecutor;
 
     // Se ejecuta cada 10 segundos
@@ -37,6 +40,7 @@ public class SearchDeliveryBatch {
         List<OrderDTO> orders = orderReadyForDeliveryRepository.listAll().stream()
                 .map(it-> OrderDTO.builder()
                         .orderId(it.getOrderId())
+                        .zoneId(it.getZoneId())
                         .status(it.getStatus())
                         .deliveryLocation(it.getDeliveryLocation())
                         .restaurantAddress(it.getRestaurantAddress())
@@ -44,11 +48,11 @@ public class SearchDeliveryBatch {
                 .toList();
 
         if(orders.isEmpty()) {
-            LOG.info("--- Not Found Orders");
+            LOG.info("----------  :/ Not Found Orders :/ --------------");
             return;
         }
 
-        LOG.info("--- Add Order To BlockingQueue");
+        LOG.info(":D ------ :D Add Order To BlockingQueue: " + orders.size());
 
         for (OrderDTO order: orders) {
             boolean addedToSet = inQueueSet.add(order.orderId());
@@ -71,8 +75,6 @@ public class SearchDeliveryBatch {
 
         int THREADS = 4;
 
-        LOG.info("--- Start Consumer Orders BlockingQueue");
-
         for (int i = 0; i < THREADS; i++) {
 
             consumerExecutor.submit(() -> {
@@ -85,14 +87,14 @@ public class SearchDeliveryBatch {
                         // Espera hasta que haya una orden en la cola
                         order = orderQueue.take();
 
-                        //log.info("START [{}] Order {}", LocalDateTime.now().format(fmt), order.getId());
-
+                        LOG.info("<3 ---------- START assignOrder");
+                        deliveryUserRepository.assignOrder(order);
 
                     } catch (Exception e) {
                         System.err.println("Error processing order: " + e.getMessage());
 
                     } finally {
-                        System.out.println("Consumer size " + (long) orderQueue.size());
+                        System.out.println(":o -------------------- Consumer size " + (long) orderQueue.size());
 
                         // Eliminar del set para permitir reprocesamiento futuro
                         if (order != null) {
