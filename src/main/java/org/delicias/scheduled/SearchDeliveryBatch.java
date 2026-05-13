@@ -33,7 +33,7 @@ public class SearchDeliveryBatch {
     @Inject
     ExecutorService consumerExecutor;
 
-    // Se ejecuta cada 10 segundos
+
     @Scheduled(every = "5s")
     void producer() {
 
@@ -43,7 +43,8 @@ public class SearchDeliveryBatch {
                         .zoneId(it.getZoneId())
                         .status(it.getStatus())
                         .deliveryLocation(it.getDeliveryLocation())
-                        .restaurantAddress(it.getRestaurantAddress())
+                        .restaurantAddress(it.getRestaurantLocation())
+                        .readyForDelivery(it.getReadyForDeliveryAt())
                         .build())
                 .toList();
 
@@ -87,14 +88,13 @@ public class SearchDeliveryBatch {
                         // Espera hasta que haya una orden en la cola
                         order = orderQueue.take();
 
-                        LOG.info("<3 ---------- START assignOrder");
+                        LOG.info("<3 ---------- START assignOrder:" +order.orderId()+", -> ready:"+order.readyForDelivery());
                         deliveryUserRepository.assignOrder(order);
 
                     } catch (Exception e) {
                         System.err.println("Error processing order: " + e.getMessage());
 
                     } finally {
-                        System.out.println(":o -------------------- Consumer size " + (long) orderQueue.size());
 
                         // Eliminar del set para permitir reprocesamiento futuro
                         if (order != null) {

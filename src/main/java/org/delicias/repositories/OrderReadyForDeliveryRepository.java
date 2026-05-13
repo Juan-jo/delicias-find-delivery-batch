@@ -7,4 +7,6 @@ import org.delicias.models.OrderReadyForDelivery;
 @ApplicationScoped
 public class OrderReadyForDeliveryRepository implements PanacheRepositoryBase<OrderReadyForDelivery, Long> {
 
+
+
 }

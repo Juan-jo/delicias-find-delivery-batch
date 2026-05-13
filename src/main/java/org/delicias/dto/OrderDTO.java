@@ -4,6 +4,7 @@ import lombok.Builder;
 import org.delicias.common.dto.order.OrderStatus;
 import org.locationtech.jts.geom.Point;
 
+import java.time.Instant;
 import java.util.Objects;
 
 @Builder
@@ -12,7 +13,9 @@ public record OrderDTO(
         Integer zoneId,
         OrderStatus status,
         Point deliveryLocation,
-        Point restaurantAddress
+        Point restaurantAddress,
+        Instant readyForDelivery
+
 ) {
     @Override
     public boolean equals(Object o) {

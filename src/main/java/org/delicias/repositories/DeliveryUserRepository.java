@@ -5,7 +5,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import org.delicias.common.dto.order.OrderStatus;
 import org.delicias.dto.OrderDTO;
 import org.delicias.models.DeliveryUser;
 
