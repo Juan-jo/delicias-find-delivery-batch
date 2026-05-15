@@ -79,7 +79,7 @@ databaseChangeLog:
                                                   UPDATE 	pos_order po
                                                   	SET 	delivery_user_order_rel_id = ir.id,
                                           					status = 'DELIVERY_ASSIGNED_ORDER'::pos_order_status,
-              												delivery_assigned_at = now() AT TIME ZONE 'UTC'
+              												delivery_assigned_at = now()
                                                     FROM 		insert_rel ir
                                                     	WHERE 	po.id = p_order_id
 
@@ -162,7 +162,7 @@ databaseChangeLog:
                             				        'status', 'ASSIGNED',
                             				        'order', jsonb_build_object(
                             				            'orderId', po.id,
-                            				            'code', 'MX-DEV-CODE-001',
+                            				            'code', po.code,
                             				            'status', po.status,
               										    'deliveryAssignedAt', to_char(po.delivery_assigned_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
                             				            'destination', jsonb_build_object(
